@@ -1,0 +1,16 @@
+# This file defines a Kubernetes Service for the BankApp application.
+# The Service exposes the BankApp application to the network, allowing it to be accessed by other services or external clients.
+# It specifies the type of service (LoadBalancer), the ports to expose, and the selector to match the pods running the BankApp application.
+# The Service ensures that traffic is directed to the correct pods based on the labels defined in the Deployment.
+# This is typically used in a Helm chart to manage the networking configuration for the BankApp application.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.bankapp.serviceName }}
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app: {{ .Values.bankapp.name }}

@@ -1,0 +1,3 @@
+infra/terraform.tfstate*
+infra/.terraform/
+helm-bankapp/charts/

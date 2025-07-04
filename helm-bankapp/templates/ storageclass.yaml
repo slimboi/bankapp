@@ -1,0 +1,15 @@
+# This file defines a StorageClass for AWS EBS volumes in Kubernetes.
+# It specifies the provisioner, parameters, reclaim policy, and volume binding mode.
+# This StorageClass can be used to dynamically provision persistent volumes for applications running in a Kubernetes cluster
+# using AWS EBS as the storage backend.
+# It is typically used in a Helm chart to manage the storage configuration for applications like BankApp
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.storageClass.name }}
+provisioner: ebs.csi.aws.com
+parameters:
+  type: {{ .Values.storageClass.type }}
+  fsType: {{ .Values.storageClass.fsType }}
+reclaimPolicy: {{ .Values.storageClass.reclaimPolicy }}
+volumeBindingMode: {{ .Values.storageClass.volumeBindingMode }}

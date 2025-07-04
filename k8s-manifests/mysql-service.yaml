@@ -1,0 +1,12 @@
+# This file contains the service configuration for MySQL.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-service
+  namespace: webapps
+spec:
+  ports:
+    - port: 3306
+      targetPort: 3306
+  selector:
+    app: mysql

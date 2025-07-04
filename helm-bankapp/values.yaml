@@ -1,0 +1,56 @@
+# # Default values for bankapp.
+# # This is a YAML-formatted file.
+# # Declare variables to be passed into your templates.
+
+# Configuration for Bitnami MySQL chart
+# This configuration sets up a MySQL database for the BankApp application.
+# It includes authentication details, primary node settings, and resource requests and limits.
+# The MySQL database will be used to store application data, and it is configured to create a database named "bankappdb".
+# The primary node will have persistent storage enabled with a specified size and storage class.
+# Resource requests and limits are defined to ensure the MySQL pod has sufficient resources to operate efficiently.
+# This configuration is typically used in a Helm chart to manage the database setup
+# for applications like BankApp running in a Kubernetes cluster.
+mysql:
+  auth:
+    rootPassword: "Test@123"
+    createDatabase: true
+    database: "bankappdb"
+  primary:
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: "ebs-sc"
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "500m"
+      limits:
+        memory: "1Gi"
+        cpu: "1"
+
+# Bankapp application configuration
+# This configuration sets up the BankApp application in a Kubernetes cluster using Helm.
+# It specifies the application name, service name, container image, number of replicas, and resource requests and limits.
+# The application is designed to run with 2 replicas for high availability, and it uses the specified Docker image.
+# Resource requests and limits are defined to ensure the application has sufficient resources to operate efficiently.
+# The memory and CPU requests and limits are set to ensure the application runs smoothly without overloading the cluster.
+# This configuration is typically used in a Helm chart to manage the deployment of the BankApp application in a Kubernetes environment.
+bankapp:
+  name: bankapp
+  serviceName: bankapp-service
+  image: adijaiswal/bankapp:v6
+  replicas: 2
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+storageClass:
+  name: bankapp-ebs-sc
+  type: gp3
+  fsType: ext4
+  reclaimPolicy: Retain
+  volumeBindingMode: WaitForFirstConsumer

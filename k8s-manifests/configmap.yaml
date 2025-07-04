@@ -1,0 +1,8 @@
+# This file contains the ConfigMap configuration for the BankApp application.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-config
+  namespace: webapps
+data:
+  MYSQL_DATABASE: bankappdb

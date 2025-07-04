@@ -1,0 +1,42 @@
+# bankapp-deployment.yaml
+# This file is part of the Helm chart for deploying the BankApp application.
+# It defines the Kubernetes Deployment resource for the BankApp service.
+# The Deployment manages the application pods, ensuring the desired number of replicas are running.
+# It also specifies the container image, resource requests and limits, environment variables, and other configurations
+# required for the BankApp to function correctly.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.bankapp.name }}
+spec:
+  replicas: {{ .Values.bankapp.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.bankapp.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.bankapp.name }}
+    spec:
+      containers:
+      - name: {{ .Values.bankapp.name }}
+        image: {{ .Values.bankapp.image }}
+        resources:
+          requests:
+            memory: {{ .Values.bankapp.resources.requests.memory }}
+            cpu: {{ .Values.bankapp.resources.requests.cpu }}
+          limits:
+            memory: {{ .Values.bankapp.resources.limits.memory }}
+            cpu: {{ .Values.bankapp.resources.limits.cpu }}
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_DATASOURCE_URL
+          value: jdbc:mysql://my-bankapp-mysql:3306/{{ .Values.mysql.auth.database }}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+        - name: SPRING_DATASOURCE_USERNAME
+          value: root
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: my-bankapp-mysql
+              key: mysql-root-password

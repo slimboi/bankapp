@@ -38,6 +38,39 @@ A complete cloud-native banking application deployed on Amazon EKS using Terrafo
 - An existing SSH key pair in your AWS account
 - A domain name (optional, for custom domain setup)
 
+## 📂 Project Structure
+
+```
+bankapp/
+├── helm-bankapp/                    # Helm chart for application deployment
+│   ├── Chart.lock                   # Helm dependency lock file
+│   ├── Chart.yaml                   # Helm chart metadata
+│   ├── charts/                      # Chart dependencies
+│   │   └── mysql-13.0.2.tgz        # MySQL Helm chart dependency
+│   ├── templates/                   # Kubernetes manifest templates
+│   │   ├── storageclass.yaml        # EBS storage class definition
+│   │   ├── bankapp-deployment.yaml  # Banking app deployment
+│   │   └── bankapp-service.yaml     # Banking app service
+│   └── values.yaml                  # Helm chart configuration values
+├── infra/                           # Terraform infrastructure code
+│   ├── main.tf                      # Main infrastructure configuration
+│   ├── output.tf                    # Terraform outputs
+│   ├── variable.tf                  # Terraform variables
+│   ├── terraform.tfstate            # Terraform state file
+│   └── terraform.tfstate.backup     # Terraform state backup
+├── k8s-manifests/                   # Raw Kubernetes manifests
+│   ├── banking-app-deployment.yaml  # Banking app deployment
+│   ├── banking-app-manifest.yaml    # Combined banking app manifest
+│   ├── banking-app-service.yaml     # Banking app service
+│   ├── configmap.yaml               # MySQL configuration
+│   ├── mysql-deployment.yaml        # MySQL deployment
+│   ├── mysql-service.yaml           # MySQL service
+│   ├── pvc.yaml                     # Persistent volume claim
+│   ├── secret.yaml                  # MySQL credentials
+│   └── storageclass.yaml            # EBS storage class
+└── README.md                        # This documentation
+```
+
 ## 🛠️ Quick Start
 
 ### 1. Infrastructure Provisioning
@@ -48,7 +81,7 @@ git clone https://github.com/slimboi/bankapp.git
 cd bankapp/infra
 
 # Configure your settings
-# Edit variables.tf - update ssh_key_name to your AWS key
+# Edit variable.tf - update ssh_key_name to your AWS key
 # Edit main.tf - update region (e.g., ap-southeast-2)
 
 # Format, initialize and validate Terraform
@@ -100,6 +133,9 @@ kubectl get all -n kube-system | grep ebs-csi
 ### Method 1: kubectl Deployment
 
 ```bash
+# Navigate to project root
+cd bankapp
+
 # Create namespace
 kubectl create namespace webapps
 
@@ -109,6 +145,17 @@ kubectl apply --dry-run=client -f k8s-manifests/
 # Deploy application
 kubectl apply -f k8s-manifests/ -n webapps
 ```
+
+**Available manifest files:**
+- `banking-app-deployment.yaml` - Banking application deployment
+- `banking-app-service.yaml` - Banking application service
+- `banking-app-manifest.yaml` - Combined banking app manifest
+- `mysql-deployment.yaml` - MySQL database deployment
+- `mysql-service.yaml` - MySQL database service
+- `configmap.yaml` - MySQL configuration
+- `secret.yaml` - MySQL credentials
+- `pvc.yaml` - Persistent volume claim
+- `storageclass.yaml` - EBS storage class
 
 ### Method 2: Helm Deployment
 
@@ -122,12 +169,21 @@ kubectl create namespace bankapp-project
 # Navigate to Helm chart directory
 cd helm-bankapp
 
-# Update dependencies
+# Update dependencies (this will download mysql-13.0.2.tgz)
 helm dependency update
 
 # Install application
 helm install my-bankapp . --namespace bankapp-project
 ```
+
+**Helm Chart Structure:**
+- `Chart.yaml` - Chart metadata and dependencies
+- `values.yaml` - Default configuration values
+- `templates/` - Kubernetes manifest templates
+  - `storageclass.yaml` - EBS storage class template
+  - `bankapp-deployment.yaml` - Banking app deployment template
+  - `bankapp-service.yaml` - Banking app service template
+- `charts/mysql-13.0.2.tgz` - MySQL dependency chart
 
 ## 🔍 Verification & Testing
 
@@ -163,9 +219,10 @@ kubectl logs -l app=bankapp -n <namespace>
 ```
 
 **Expected Output:**
-- Application accessible via LoadBalancer external IP
-- Banking application login page should load
+- Application accessible via LoadBalancer external URL (AWS ELB)
+- Banking application login page should load in browser
 - Database connection successful
+- LoadBalancer will have a format like: `a5db4ceba255546f78b8135eb5f355f7-243499697.ap-southeast-2.elb.amazonaws.com`
 
 ## 📁 Application Components
 
@@ -267,7 +324,7 @@ kubectl describe pvc mysql-pvc -n <namespace>
 |-------|----------|----------|
 | Pod stuck in Pending | Pod doesn't start | Check node capacity, storage class, and PVC binding |
 | MySQL connection failed | App can't connect to DB | Verify service names, secrets, and network policies |
-| Load balancer not accessible | External IP not reachable | Check security groups, VPC configuration, and AWS LB controller |
+| Load balancer not accessible | External URL not reachable | Check security groups, VPC configuration, and AWS LB controller |
 | Domain not resolving | Custom domain doesn't work | Verify DNS propagation and CNAME record configuration |
 | Storage issues | Database data loss | Check PVC status and EBS CSI driver installation |
 
@@ -309,22 +366,151 @@ helm upgrade my-bankapp . --set replicaCount=3 -n bankapp-project
 
 ## 🧹 Cleanup
 
-### Remove kubectl Deployment
-```bash
-kubectl delete namespace webapps
-```
+### Complete Cleanup Process
 
-### Remove Helm Deployment
+**⚠️ Important**: Follow this cleanup order to avoid orphaned AWS resources and additional charges.
+
+#### Step 1: Remove Kubernetes Applications
 ```bash
+# Remove kubectl deployment
+kubectl delete namespace webapps
+
+# OR remove Helm deployment
 helm uninstall my-bankapp -n bankapp-project
 kubectl delete namespace bankapp-project
 ```
 
-### Remove Infrastructure
+#### Step 2: Remove EKS Add-ons and Service Accounts
 ```bash
-cd ../infra
+# Delete EBS CSI service account (created with eksctl)
+eksctl delete iamserviceaccount \
+  --region ap-southeast-2 \
+  --cluster bankapp-cluster \
+  --namespace kube-system \
+  --name ebs-csi-controller-sa
+
+# Delete OIDC provider association
+eksctl utils disassociate-iam-oidc-provider \
+  --region ap-southeast-2 \
+  --cluster bankapp-cluster \
+  --approve
+```
+
+#### Step 3: Manual AWS Console Cleanup (if needed)
+If the above commands don't remove everything, manually delete from AWS Console:
+
+1. **EBS Volumes**:
+   - Go to EC2 → Volumes
+   - Delete any volumes with tags related to your cluster
+   - Look for volumes in "available" state after cluster deletion
+
+2. **IAM Service Account**:
+   - Go to IAM → Roles
+   - Delete: `eksctl-bankapp-cluster-addon-iamserviceaccount-kube-system-ebs-csi-controller-sa`
+
+3. **OIDC Provider**:
+   - Go to IAM → Identity providers
+   - Delete OIDC provider for your EKS cluster
+
+4. **Load Balancers**:
+   - Go to EC2 → Load Balancers
+   - Delete any ELB created by Kubernetes services
+
+#### Step 4: Remove Infrastructure
+```bash
+cd infra
 terraform destroy --auto-approve
 ```
+
+### Cleanup Verification Commands
+```bash
+# Verify no running pods
+kubectl get pods --all-namespaces
+
+# Check for remaining PVs
+kubectl get pv
+
+# Verify EKS cluster removal
+aws eks describe-cluster --name bankapp-cluster --region ap-southeast-2
+# Should return: ResourceNotFoundException
+
+# Check for remaining EBS volumes
+aws ec2 describe-volumes --region ap-southeast-2 \
+  --filters "Name=tag:kubernetes.io/cluster/bankapp-cluster,Values=owned"
+```
+
+### Cost Optimization Tips
+- **EBS Volumes**: Can incur charges even when detached (~$0.10/GB/month)
+- **Load Balancers**: Classic/Network Load Balancers charge hourly (~$18/month)
+- **EKS Cluster**: Charges $0.10/hour (~$73/month) just for the control plane
+- **EC2 Instances**: Node groups will incur compute charges
+
+### Troubleshooting Cleanup Issues
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| EBS volumes remain after deletion | PV reclaim policy or finalizers | Manual deletion from AWS Console |
+| IAM service account persists | eksctl didn't clean up properly | Delete manually from IAM console |
+| Load balancer remains | Service deletion didn't trigger cleanup | Delete manually from EC2 console |
+| OIDC provider remains | Disassociate command failed | Delete manually from IAM console |
+
+## 🔧 File-Specific Configurations
+
+### Terraform Files (`infra/`)
+
+#### `main.tf`
+Contains the main EKS cluster configuration:
+- EKS cluster setup
+- Node group configuration
+- VPC and networking setup
+- Security groups
+
+#### `variable.tf`
+Key variables to customize:
+```hcl
+variable "ssh_key_name" {
+  description = "Name of the SSH key pair in AWS"
+  type        = string
+  default     = "your-key-name"  # Update this
+}
+
+variable "region" {
+  description = "AWS region"
+  type        = string
+  default     = "ap-southeast-2"  # Update as needed
+}
+```
+
+#### `output.tf`
+Outputs important information:
+- EKS cluster endpoint
+- EKS cluster name
+- Node group details
+
+### Kubernetes Manifests (`k8s-manifests/`)
+
+#### Key Configuration Files:
+- **`secret.yaml`**: Contains MySQL root password (base64 encoded)
+- **`configmap.yaml`**: MySQL configuration settings
+- **`storageclass.yaml`**: EBS storage class with gp3 type
+- **`pvc.yaml`**: 5Gi persistent volume claim for MySQL data
+
+### Helm Chart (`helm-bankapp/`)
+
+#### `Chart.yaml`
+```yaml
+dependencies:
+  - name: mysql
+    version: 13.0.2
+    repository: https://charts.bitnami.com/bitnami
+```
+
+#### `values.yaml`
+Configure application settings:
+- Replica count
+- Resource limits
+- MySQL configuration
+- Service type and ports
 
 ## 📖 Learning Resources
 
@@ -332,6 +518,43 @@ terraform destroy --auto-approve
 - [Helm Documentation](https://helm.sh/docs/)
 - [AWS EKS User Guide](https://docs.aws.amazon.com/eks/latest/userguide/)
 - [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+- [Bitnami MySQL Helm Chart](https://github.com/bitnami/charts/tree/main/bitnami/mysql)
+
+## 🎯 DevOps Learning Outcomes
+
+This project demonstrates proficiency in:
+
+### Infrastructure as Code
+- **Terraform**: AWS EKS cluster provisioning
+- **Resource Management**: VPC, security groups, node groups
+- **State Management**: Terraform state handling
+
+### Container Orchestration
+- **Kubernetes**: Pod, deployment, service, and persistent volume management
+- **Storage**: EBS CSI driver integration and persistent volumes
+- **Networking**: Service discovery and load balancing
+
+### Package Management
+- **Helm**: Chart creation, dependency management, and templating
+- **Chart Development**: Custom templates and values configuration
+
+### AWS Services
+- **EKS**: Managed Kubernetes service
+- **EBS**: Persistent storage for databases
+- **ELB**: Load balancing for external access
+- **IAM**: Service accounts and OIDC integration
+
+### AWS Resource Management
+- **EKS Cleanup**: Understanding eksctl-created resources
+- **Cost Optimization**: Identifying and removing billable resources
+- **Manual Cleanup**: AWS Console resource management
+- **Resource Tagging**: Kubernetes resource identification in AWS
+
+### Best Practices
+- **Security**: Kubernetes secrets and configmaps
+- **Monitoring**: Health checks and probes
+- **Scalability**: Resource limits and horizontal scaling
+- **Documentation**: Comprehensive project documentation
 
 ## 🤝 Contributing
 
